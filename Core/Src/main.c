@@ -19,8 +19,10 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 
+
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "lsm6dsox.h"
 
 /* USER CODE END Includes */
 
@@ -93,6 +95,7 @@ int main(void)
   MX_SPI1_Init();
   MX_SPI2_Init();
   /* USER CODE BEGIN 2 */
+  LSM6DSOX_Init(&hspi1);
 
   /* USER CODE END 2 */
 
