@@ -40,4 +40,23 @@ uint8_t LSM6DSOX_Init(SPI_HandleTypeDef *hspi)
         return 0; // Failure
     }
 }
+void LSM6DSOX_ReadAccel(SPI_HandleTypeDef *hspi, LSM6DSOX_Axes_t *axes)
+{
+    uint8_t buffer[6];
+    LSM6DSOX_ReadReg(hspi, OUTX_L_A, buffer, 6);
+    axes->x = (int16_t)(buffer[1] << 8 | buffer[0]); //combines low and high bytes for each x,y,z direction
+    axes->y = (int16_t)(buffer[3] << 8 | buffer[2]);
+    axes->z = (int16_t)(buffer[5] << 8 | buffer[4]);
+
+}
+void LSM6DSOX_ReadGyro(SPI_HandleTypeDef *hspi, LSM6DSOX_Axes_t *axes)
+{
+    uint8_t buffer[6];
+    LSM6DSOX_ReadReg(hspi, OUTX_L_G, buffer, 6);
+    axes->x = (int16_t)(buffer[1] << 8 | buffer[0]);
+    axes->y = (int16_t)(buffer[3] << 8 | buffer[2]);
+    axes->z = (int16_t)(buffer[5] << 8 | buffer[4]);
+
+}
+
 
