@@ -19,6 +19,7 @@ typedef struct{
 //Function prototypes
 uint8_t LSM6DSOX_Init(SPI_HandleTypeDef *hspi);
 void LSM6DSOX_ReadAccel(SPI_HandleTypeDef *hspi, LSM6DSOX_Axes_t *axes);
+void LSM6DSOX_ReadGyro(SPI_HandleTypeDef *hspi, LSM6DSOX_Axes_t *axes);
 
 
 #endif /* LSM6DSOX_H */
