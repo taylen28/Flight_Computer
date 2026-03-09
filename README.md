@@ -1,4 +1,5 @@
 #  STM32 Rocket Flight Computer
+//note: More implmenentation and documentation will be added soon for a more user-friendly experience
 
 Custom **plug-and-play rocket flight computer** designed for telemetry, data logging, and actuator control using the **STM32F303VCT6** microcontroller.
 
