@@ -7,6 +7,7 @@ This project integrates an **IMU, barometer, SD card logging, LoRa telemetry, an
 
 ---
 
+
 # Overview
 
 This project implements a **modular rocket flight computer** capable of:
@@ -54,6 +55,8 @@ Package: **100-pin LQFP**
 | **Pyro Channels** | GPIO (planned) | TBD |
 
 ---
+<img width="1692" height="505" alt="image" src="https://github.com/user-attachments/assets/2fe1ae9b-6021-43f9-90c7-c6edc726742e" />
+
 
 # System Features
 
