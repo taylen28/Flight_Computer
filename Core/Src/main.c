@@ -139,6 +139,7 @@ int main(void)
   /* USER CODE BEGIN 2 */
   LSM6DSOX_Init(&hspi1);
   BMP388_Init(&hspi2);
+  HAL_Delay(50);
   BMP388_Read(&hspi2, &bmpData);
   launchAltitude = (float)bmpData.altitude;
   maxAltitude = launchAltitude;
