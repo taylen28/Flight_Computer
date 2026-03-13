@@ -41,7 +41,7 @@
   */
 
 #ifdef HAL_ADC_MODULE_ENABLED
-//minor
+    
 /* Private typedef -----------------------------------------------------------*/
 /* Private define ------------------------------------------------------------*/
 /** @defgroup ADCEx_Private_Constants ADCEx Private Constants

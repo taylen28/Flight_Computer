@@ -12,8 +12,8 @@ static void LSM6DSOX_ReadReg(SPI_HandleTypeDef *hspi, uint8_t reg, uint8_t *data
     //cs need to be high after to end it
     uint8_t txByte = reg | 0x80; // Set MSB for read operation
     HAL_GPIO_WritePin(IMU_SPI_CS_GPIO_Port, IMU_SPI_CS_Pin, GPIO_PIN_RESET); // Pull CS low
-    HAL_SPI_Transmit(hspi, &txByte, 1, HAL_MAX_DELAY); // Send register address
-    HAL_SPI_Receive(hspi, data, size, HAL_MAX_DELAY); // Read data
+    HAL_SPI_Transmit(hspi, &txByte, 1, 10); // Send register address
+    HAL_SPI_Receive(hspi, data, size, 10); // Read data
     HAL_GPIO_WritePin(IMU_SPI_CS_GPIO_Port, IMU_SPI_CS_Pin, GPIO_PIN_SET); // Pull CS high
     
 }
@@ -21,8 +21,8 @@ static void LSM6DSOX_ReadReg(SPI_HandleTypeDef *hspi, uint8_t reg, uint8_t *data
 static void LSM6DSOX_WriteReg(SPI_HandleTypeDef *hspi, uint8_t reg, uint8_t value)
 {
     HAL_GPIO_WritePin(IMU_SPI_CS_GPIO_Port,IMU_SPI_CS_Pin, GPIO_PIN_RESET);
-    HAL_SPI_Transmit(hspi, &reg, 1, HAL_MAX_DELAY);
-    HAL_SPI_Transmit(hspi,&value,1, HAL_MAX_DELAY);
+    HAL_SPI_Transmit(hspi, &reg, 1, 10);
+    HAL_SPI_Transmit(hspi,&value,1, 10);
     HAL_GPIO_WritePin(IMU_SPI_CS_GPIO_Port,IMU_SPI_CS_Pin, GPIO_PIN_SET);
     
 }
