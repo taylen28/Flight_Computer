@@ -23,7 +23,9 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "lsm6dsox.h"
+#include "servo.h"
 #include <stdio.h>
+#include <stdlib.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -57,6 +59,9 @@ LSM6DSOX_Axes_t gyroAxes;
 LSM6DSOX_Axes_t accelAxes;
 volatile uint8_t logFlag = 0;
 FRESULT sdResult = FR_NOT_READY;
+uint8_t rxByte;
+char rxBuf[16];
+uint8_t rxIdx = 0;
 
 /* USER CODE END PV */
 
@@ -117,9 +122,14 @@ int main(void)
   /* USER CODE BEGIN 2 */
   LSM6DSOX_Init(&hspi1);
   HAL_TIM_Base_Start_IT(&htim6);
+  Servo_Init(&htim3);
+  HAL_UART_Receive_IT(&huart1, &rxByte, 1);
   sdResult = f_mount(&USERFatFS, USERPath, 1);
   if (sdResult == FR_OK) {
-      sdResult = f_open(&USERFile, "LOG.CSV", FA_OPEN_APPEND | FA_WRITE);
+      sdResult = f_open(&USERFile, "LOG.CSV", FA_OPEN_ALWAYS | FA_WRITE);
+      if (sdResult == FR_OK) {
+          f_lseek(&USERFile, f_size(&USERFile)); // seek to end for append
+      }
   }
   /* USER CODE END 2 */
 
@@ -515,6 +525,35 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+
+// UART command parser — type "S1:90" to set servo 1 to 90 degrees
+// or "S1:1500" for direct pulse width in microseconds
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+    if (huart->Instance == USART1) {
+        if (rxByte == '\n' || rxByte == '\r') {
+            if (rxIdx > 0) {
+                rxBuf[rxIdx] = '\0';
+                // Parse "S<n>:<value>"
+                if (rxBuf[0] == 'S' && rxIdx >= 4) {
+                    uint8_t servo = rxBuf[1] - '0';          // servo number 1-3
+                    uint16_t value = (uint16_t)atoi(&rxBuf[3]); // value after ':'
+                    if (servo >= 1 && servo <= 3) {
+                        if (value <= 180)
+                            Servo_SetAngle(&htim3, servo, (uint8_t)value);
+                        else
+                            Servo_SetPulse(&htim3, servo, value);
+                    }
+                }
+                rxIdx = 0;
+            }
+        } else if (rxIdx < sizeof(rxBuf) - 1) {
+            rxBuf[rxIdx++] = rxByte;
+        }
+        HAL_UART_Receive_IT(&huart1, &rxByte, 1); // re-arm
+    }
+}
+
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
     if (htim->Instance == TIM6)
