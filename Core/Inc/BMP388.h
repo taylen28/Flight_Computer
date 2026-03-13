@@ -26,6 +26,7 @@ typedef struct{
 typedef struct{
     double pressure; //Pa
     double temperature;//Celcius
+    double altitude; //meters (calculated from pressure)
 
 }BMP388_Data_t;
 

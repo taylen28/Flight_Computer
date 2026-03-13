@@ -23,13 +23,24 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "lsm6dsox.h"
+#include "BMP388.h"
 #include "servo.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
+typedef enum {
+    STATE_IDLE,
+    STATE_ARMED,
+    STATE_BOOST,
+    STATE_COAST,
+    STATE_APOGEE,
+    STATE_DESCENT,
+    STATE_LANDED
+} FlightState_t;
 
 
 /* USER CODE END PTD */
@@ -59,9 +70,15 @@ LSM6DSOX_Axes_t gyroAxes;
 LSM6DSOX_Axes_t accelAxes;
 volatile uint8_t logFlag = 0;
 FRESULT sdResult = FR_NOT_READY;
+BMP388_Data_t bmpData;
 uint8_t rxByte;
 char rxBuf[16];
 uint8_t rxIdx = 0;
+FlightState_t flightState = STATE_ARMED;
+float launchAltitude = 0.0f;
+float maxAltitude = 0.0f;
+uint32_t landedTicks = 0;
+
 
 /* USER CODE END PV */
 
@@ -121,6 +138,10 @@ int main(void)
   MX_FATFS_Init();
   /* USER CODE BEGIN 2 */
   LSM6DSOX_Init(&hspi1);
+  BMP388_Init(&hspi2);
+  BMP388_Read(&hspi2, &bmpData);
+  launchAltitude = (float)bmpData.altitude;
+  maxAltitude = launchAltitude;
   HAL_TIM_Base_Start_IT(&htim6);
   Servo_Init(&htim3);
   HAL_UART_Receive_IT(&huart1, &rxByte, 1);
@@ -144,11 +165,12 @@ int main(void)
         logFlag = 0;
         HAL_GPIO_TogglePin(LED3_GPIO_Port, LED3_Pin);
         if (sdResult == FR_OK) {
-            char line[64];
+            char line[96];
             UINT bw;
-            int len = sprintf(line, "%d,%d,%d,%d,%d,%d\r\n",
+            int len = sprintf(line, "%d,%d,%d,%d,%d,%d,%.2f,%.2f\r\n",
                 accelAxes.x, accelAxes.y, accelAxes.z,
-                gyroAxes.x, gyroAxes.y, gyroAxes.z);
+                gyroAxes.x, gyroAxes.y, gyroAxes.z,
+                bmpData.pressure, bmpData.temperature);
             f_write(&USERFile, (uint8_t*)line, len, &bw);
             f_sync(&USERFile);
         }
@@ -483,7 +505,7 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOA, BMU_CS_SPI_Pin|IMU_SPI_CS_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(SDCARD_SPI_CS_GPIO_Port, SDCARD_SPI_CS_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(SDCARD_SPI_CS_GPIO_Port, SDCARD_SPI_CS_Pin, GPIO_PIN_SET);  
 
   /*Configure GPIO pins : Lora_M0_Pin Lora_M1_Pin */
   GPIO_InitStruct.Pin = Lora_M0_Pin|Lora_M1_Pin;
@@ -525,6 +547,56 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+//flight state machine
+static void RunStateMachine(void)
+{
+    float alt     = (float)bmpData.altitude;
+    float ax      = accelAxes.x / 16384.0f;
+    float ay      = accelAxes.y / 16384.0f;
+    float az      = accelAxes.z / 16384.0f;
+    float accel_g = sqrtf(ax*ax + ay*ay + az*az);
+
+    switch (flightState)
+    {
+        case STATE_IDLE:
+            break;
+
+        case STATE_ARMED:
+            if (accel_g > 2.5f)
+                flightState = STATE_BOOST;
+            break;
+
+        case STATE_BOOST:
+            if (alt > maxAltitude) maxAltitude = alt;
+            if (accel_g < 1.2f)
+                flightState = STATE_COAST;
+            break;
+
+        case STATE_COAST:
+            if (alt > maxAltitude) maxAltitude = alt;
+            if (alt < maxAltitude - 5.0f)
+                flightState = STATE_APOGEE;
+            break;
+
+        case STATE_APOGEE:
+            flightState = STATE_DESCENT;
+            break;
+
+        case STATE_DESCENT:
+            if (alt < launchAltitude + 20.0f) {
+                landedTicks++;
+                if (landedTicks > 2000)
+                    flightState = STATE_LANDED;
+            } else {
+                landedTicks = 0;
+            }
+            break;
+
+        case STATE_LANDED:
+            break;
+    }
+}
+
 
 // UART command parser — type "S1:90" to set servo 1 to 90 degrees
 // or "S1:1500" for direct pulse width in microseconds
@@ -560,15 +632,22 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     {
         LSM6DSOX_ReadAccel(&hspi1, &accelAxes);
         LSM6DSOX_ReadGyro(&hspi1, &gyroAxes);
+        BMP388_Read(&hspi2, &bmpData);
+        RunStateMachine();
         static uint32_t count = 0;
         if (++count >= 100)
         {
             count = 0;
             logFlag = 1;
-            char msg[64];
-            int len = sprintf(msg, "AX:%d AY:%d AZ:%d GX:%d GY:%d GZ:%d\r\n",
-                accelAxes.x, accelAxes.y, accelAxes.z,
-                gyroAxes.x, gyroAxes.y, gyroAxes.z);
+            static const char *stateNames[] = {
+                "IDLE","ARMED","BOOST","COAST","APOGEE","DESCENT","LANDED"
+            };
+            char msg[128];
+            int len = sprintf(msg, "AX:%d AY:%d AZ:%d GX:%d GY:%d GZ:%d P:%.2f T:%.2f ALT:%.1f ST:%s\r\n",
+            accelAxes.x, accelAxes.y, accelAxes.z,
+                gyroAxes.x, gyroAxes.y, gyroAxes.z,
+                bmpData.pressure, bmpData.temperature,
+                bmpData.altitude, stateNames[flightState]);
             HAL_UART_Transmit(&huart1, (uint8_t*)msg, len, 100);
         }
     }

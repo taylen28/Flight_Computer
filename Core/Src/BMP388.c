@@ -1,7 +1,7 @@
 #include "main.h"
 #include "BMP388.h"
 #include "stm32f3xx_hal.h"
-
+#include "math.h"
 
 static void BMP388_ReadReg(SPI_HandleTypeDef *hspi, uint8_t reg, uint8_t *data, uint16_t size)
 {
@@ -11,9 +11,11 @@ static void BMP388_ReadReg(SPI_HandleTypeDef *hspi, uint8_t reg, uint8_t *data, 
     //read data MISO
     //cs need to be high after to end it
     uint8_t txByte = reg | 0x80; // Set MSB for read operation
+    uint8_t dummy;
     HAL_GPIO_WritePin(BMU_CS_SPI_GPIO_Port, BMU_CS_SPI_Pin, GPIO_PIN_RESET); // Pull CS low
     HAL_SPI_Transmit(hspi, &txByte, 1, HAL_MAX_DELAY); // Send register address
-    HAL_SPI_Receive(hspi, data, size, HAL_MAX_DELAY); // Read data
+    HAL_SPI_Receive(hspi, &dummy, 1, HAL_MAX_DELAY);   // discard BMP388 dummy byte
+    HAL_SPI_Receive(hspi, data, size, HAL_MAX_DELAY);  // Read actual data
     HAL_GPIO_WritePin(BMU_CS_SPI_GPIO_Port, BMU_CS_SPI_Pin, GPIO_PIN_SET); // Pull CS high
     
 }
@@ -92,6 +94,8 @@ void BMP388_Read(SPI_HandleTypeDef *hspi, BMP388_Data_t *data)
     double p9  = p7 * p8;
     double p10 = p9 + ((double)raw_press * (double)raw_press * (double)raw_press) * (double)calib.par_p11;
     data->pressure = out1 + out2 + p10;
+
+    data->altitude = 44330.0 * (1.0 - pow(data->pressure / 101325.0, 0.1903));
 
 
 }
