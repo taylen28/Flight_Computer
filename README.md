@@ -254,9 +254,3 @@ Focus areas:
 - Hardware/software co-design
 
 ---
-
-# Disclaimer
-
-This project is intended for **educational and experimental purposes only**.
-
-Rocket avionics systems should be designed with **proper safety, redundancy, and testing procedures** before use in real flight environments.
