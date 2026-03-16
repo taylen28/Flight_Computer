@@ -3,11 +3,11 @@
 void Servo_Init(TIM_HandleTypeDef *htim)
 {
     HAL_TIM_PWM_Start(htim, TIM_CHANNEL_1);
-    HAL_TIM_PWM_Start(htim, TIM_CHANNEL_2);
+    // CH2 (PE3) disabled on Discovery board — PE3 is L3GD20 CS, conflicts with SPI1
+    // HAL_TIM_PWM_Start(htim, TIM_CHANNEL_2);
     HAL_TIM_PWM_Start(htim, TIM_CHANNEL_3);
-    // Center all servos at 90 degrees on startup
+    // Center active servos at 90 degrees on startup
     Servo_SetAngle(htim, 1, 90);
-    Servo_SetAngle(htim, 2, 90);
     Servo_SetAngle(htim, 3, 90);
 }
 

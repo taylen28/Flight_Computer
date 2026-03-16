@@ -63,6 +63,8 @@ SPI_HandleTypeDef hspi3;
 TIM_HandleTypeDef htim3;
 TIM_HandleTypeDef htim6;
 
+IWDG_HandleTypeDef hiwdg;
+
 UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN PV */
@@ -91,6 +93,7 @@ static void MX_SPI3_Init(void);
 static void MX_TIM3_Init(void);
 static void MX_TIM6_Init(void);
 static void MX_USART1_UART_Init(void);
+static void MX_IWDG_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -136,9 +139,59 @@ int main(void)
   MX_TIM6_Init();
   MX_USART1_UART_Init();
   MX_FATFS_Init();
+  MX_IWDG_Init();
   /* USER CODE BEGIN 2 */
-  LSM6DSOX_Init(&hspi1);
-  BMP388_Init(&hspi2);
+  // Raw WHO_AM_I reads before init
+  {
+      uint8_t tx, rx;
+      char dbg[64];
+      int n;
+
+      // IMU raw read (reg 0x0F | 0x80 = read)
+      tx = 0x0F | 0x80;
+      rx = 0;
+      HAL_GPIO_WritePin(IMU_SPI_CS_GPIO_Port, IMU_SPI_CS_Pin, GPIO_PIN_RESET);
+      HAL_SPI_Transmit(&hspi1, &tx, 1, 10);
+      HAL_SPI_Receive(&hspi1, &rx, 1, 10);
+      HAL_GPIO_WritePin(IMU_SPI_CS_GPIO_Port, IMU_SPI_CS_Pin, GPIO_PIN_SET);
+      n = sprintf(dbg, "IMU_RAW:0x%02X (expect 0x6C)\r\n", rx);
+      HAL_UART_Transmit(&huart1, (uint8_t*)dbg, n, 100);
+
+      // BMP raw read (reg 0x00 | 0x80, then discard dummy byte)
+      tx = 0x00 | 0x80;
+      rx = 0;
+      uint8_t dummy;
+      HAL_GPIO_WritePin(BMU_CS_SPI_GPIO_Port, BMU_CS_SPI_Pin, GPIO_PIN_RESET);
+      HAL_SPI_Transmit(&hspi2, &tx, 1, 10);
+      HAL_SPI_Receive(&hspi2, &dummy, 1, 10);
+      HAL_SPI_Receive(&hspi2, &rx, 1, 10);
+      HAL_GPIO_WritePin(BMU_CS_SPI_GPIO_Port, BMU_CS_SPI_Pin, GPIO_PIN_SET);
+      n = sprintf(dbg, "BMP_RAW:0x%02X (expect 0x50)\r\n", rx);
+      HAL_UART_Transmit(&huart1, (uint8_t*)dbg, n, 100);
+  }
+
+  uint8_t imuOk = LSM6DSOX_Init(&hspi1);
+  uint8_t bmpOk = BMP388_Init(&hspi2);
+  {
+      char dbg[64];
+      int n = sprintf(dbg, "IMU_INIT:%d BMP_INIT:%d\r\n", imuOk, bmpOk);
+      HAL_UART_Transmit(&huart1, (uint8_t*)dbg, n, 100);
+  }
+  // Dump first 6 BMP388 calibration bytes raw
+  {
+      uint8_t tx = 0x31 | 0x80;
+      uint8_t cal[6] = {0};
+      uint8_t dummy;
+      HAL_GPIO_WritePin(BMU_CS_SPI_GPIO_Port, BMU_CS_SPI_Pin, GPIO_PIN_RESET);
+      HAL_SPI_Transmit(&hspi2, &tx, 1, 10);
+      HAL_SPI_Receive(&hspi2, &dummy, 1, 10);
+      HAL_SPI_Receive(&hspi2, cal, 6, 10);
+      HAL_GPIO_WritePin(BMU_CS_SPI_GPIO_Port, BMU_CS_SPI_Pin, GPIO_PIN_SET);
+      char dbg[64];
+      int n = sprintf(dbg, "CAL:%02X %02X %02X %02X %02X %02X\r\n",
+                      cal[0],cal[1],cal[2],cal[3],cal[4],cal[5]);
+      HAL_UART_Transmit(&huart1, (uint8_t*)dbg, n, 100);
+  }
   HAL_Delay(50);
   BMP388_Read(&hspi2, &bmpData);
   launchAltitude = (float)bmpData.altitude;
@@ -162,6 +215,7 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+    HAL_IWDG_Refresh(&hiwdg);
     if (logFlag) {
         logFlag = 0;
         HAL_GPIO_TogglePin(LED3_GPIO_Port, LED3_Pin);
@@ -477,6 +531,18 @@ static void MX_USART1_UART_Init(void)
 }
 
 /**
+  * @brief IWDG Initialization Function
+  * @retval None
+  */
+static void MX_IWDG_Init(void)
+{
+    hiwdg.Instance = IWDG;
+    hiwdg.Init.Prescaler = IWDG_PRESCALER_64;  // 40kHz / 64 = 625Hz
+    hiwdg.Init.Reload = 624;                    // 624 / 625Hz = ~1 second timeout
+    HAL_IWDG_Init(&hiwdg);
+}
+
+/**
   * @brief GPIO Initialization Function
   * @param None
   * @retval None
@@ -635,7 +701,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
         LSM6DSOX_ReadGyro(&hspi1, &gyroAxes);
         BMP388_Read(&hspi2, &bmpData);
         RunStateMachine();
-        static uint32_t count = 0;
+        static uint32_t count = 0; //important or else it will keep resetting never reaching 100 for interupt
         if (++count >= 100)
         {
             count = 0;
