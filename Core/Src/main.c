@@ -177,6 +177,13 @@ int main(void)
       int n = sprintf(dbg, "IMU_INIT:%d BMP_INIT:%d\r\n", imuOk, bmpOk);
       HAL_UART_Transmit(&huart1, (uint8_t*)dbg, n, 100);
   }
+  if (!imuOk || !bmpOk) {
+      // Sensor init failed — blink LED fast and halt, do not fly
+      while (1) {
+          HAL_GPIO_TogglePin(LED3_GPIO_Port, LED3_Pin);
+          HAL_Delay(100);
+      }
+  }
   // Dump first 6 BMP388 calibration bytes raw
   {
       uint8_t tx = 0x31 | 0x80;
@@ -215,11 +222,11 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-    HAL_IWDG_Refresh(&hiwdg);
+    HAL_IWDG_Refresh(&hiwdg); //refresh watchdog to prevent reset, will reset if main loop is stuck for more than ~1.5s
     if (logFlag) {
-        logFlag = 0;
+        logFlag = 0; // clear flag immediately in case SD write is slow to avoid missing samples
         HAL_GPIO_TogglePin(LED3_GPIO_Port, LED3_Pin);
-        if (sdResult == FR_OK) {
+        if (sdResult == FR_OK) { // only attempt to log if SD is working
             char line[96];
             UINT bw;
             int len = sprintf(line, "%d,%d,%d,%d,%d,%d,%.2f,%.2f\r\n",
@@ -693,6 +700,19 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
     }
 }
 
+static uint8_t isSensorDataValid(void)
+{
+    if (bmpData.pressure < 30000.0 || bmpData.pressure > 110000.0)
+        return 0;
+    if (bmpData.temperature < -40.0 || bmpData.temperature > 85.0)
+        return 0;
+    if (flightState == STATE_ARMED) {
+        if (accelAxes.z < 14000 || accelAxes.z > 18000)
+            return 0;
+    }
+    return 1;
+}
+
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
     if (htim->Instance == TIM6)
@@ -700,12 +720,13 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
         LSM6DSOX_ReadAccel(&hspi1, &accelAxes);
         LSM6DSOX_ReadGyro(&hspi1, &gyroAxes);
         BMP388_Read(&hspi2, &bmpData);
+        if (!isSensorDataValid()) return; // reject bad data, don't update state machine
         RunStateMachine();
         static uint32_t count = 0; //important or else it will keep resetting never reaching 100 for interupt
         if (++count >= 100)
         {
             count = 0;
-            logFlag = 1;
+            logFlag = 1;    
             static const char *stateNames[] = {
                 "IDLE","ARMED","BOOST","COAST","APOGEE","DESCENT","LANDED"
             };
