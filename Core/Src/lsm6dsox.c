@@ -61,21 +61,49 @@
 // }
 static void LSM6DSOX_GPIO_Init()
 {
+    //MODER
     GPIOA_MODER &= ~(0x3 << 10);   // clear 
     GPIOA_MODER |=  (0x2 << 10);   // set AF mode — same shift
+    GPIOA_MODER &= ~(0x3 << 12);   // clear 
+    GPIOA_MODER |=  (0x2 << 12);
+    GPIOA_MODER &= ~(0x3 << 14);   // clear 
+    GPIOA_MODER |=  (0x2 << 14);
+    GPIOA_MODER &= ~(0x3 << 20);   // clear 
+    GPIOA_MODER |=  (0x01 << 20); //CS pin Output
+
+    //high speed for MOSI(output) and SCK(clock)
+    GPIOA_OSPEEDR &= ~(0x3 << 10 ); //PA5
+    GPIOA_OSPEEDR |= (0x3 << 10);
+    GPIOA_OSPEEDR &= ~(0x3 << 14); //PA7
+    GPIOA_OSPEEDR |= (0x3 << 14);
+
+    //AFRL
+    GPIOA_AFRL &= ~((uint32_t)0xF << 20);
+    GPIOA_AFRL |= ((uint32_t)0b0101 << 20); //AF5 = 4b'0101
+    GPIOA_AFRL &= ~((uint32_t)0xF << 24);
+    GPIOA_AFRL |= ((uint32_t)0b0101 << 24);
+    GPIOA_AFRL &= ~((uint32_t)0xF << 28);
+    GPIOA_AFRL |= ((uint32_t)0b0101 << 28);
+
+    //BRSS For Chip Select Drive High   
+    GPIOA_BSRR = (1 << 10);
+  
 
 }
-static void LSM6DSOX_RCC_Init()
+static void LSM6DSOX_RCC_Init() 
 {
     RCC_AHBENR  |= (1 << 17); //enable GPIOAEN
     RCC_APB2ENR |= (1 << 12); //enable SPI1EN
 }
 
+static void LSM6DSOX_SPI_Init()
+{
+
+}
+
 
 static void LSM6dsox_WriteReg( uint8_t reg, uint8_t value)
 {
-    LSM6DSOX_RCC_Init();
-    LSM6DSOX_GPIO_Init();
 
     
 }
