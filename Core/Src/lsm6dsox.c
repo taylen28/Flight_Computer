@@ -59,6 +59,12 @@
 //     axes->z = (int16_t)(buffer[5] << 8 | buffer[4]);
 
 // }
+static void LSM6DSOX_GPIO_Init()
+{
+    GPIOA_MODER &= ~(0x3 << 10);   // clear 
+    GPIOA_MODER |=  (0x2 << 10);   // set AF mode — same shift
+
+}
 static void LSM6DSOX_RCC_Init()
 {
     RCC_AHBENR  |= (1 << 17); //enable GPIOAEN
@@ -69,6 +75,8 @@ static void LSM6DSOX_RCC_Init()
 static void LSM6dsox_WriteReg( uint8_t reg, uint8_t value)
 {
     LSM6DSOX_RCC_Init();
+    LSM6DSOX_GPIO_Init();
+
     
 }
 
